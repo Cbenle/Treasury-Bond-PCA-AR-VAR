@@ -1,0 +1,549 @@
+---
+title: "New Problems"
+author: "Cornelius Benle"
+date: "2026-09-18"
+output: html_document
+---
+
+
+#Problem 1
+
+```{r}
+library(readxl)
+
+# Read annual PC1 volatility
+PC1_annual <- read_excel(
+  "Zero_Coupon_1961_PC_Volatility.xlsx",
+  sheet = "PC1 Annual"
+)
+
+# Keep 1962-2025
+PC1_annual <- PC1_annual[
+  PC1_annual$Year >= 1962 & PC1_annual$Year <= 2025,
+]
+
+# Annual PC1 volatility from log zero-coupon rates
+V <- PC1_annual$`PC1 Log Volatility`
+
+# Take natural log
+ln_V <- log(V)
+
+# Put together
+Vt <- data.frame(
+  Year = PC1_annual$Year,
+  V = V,
+  ln_V = ln_V
+)
+
+# Fitting AR(1) model
+AR1 <- arima(
+  Vt$ln_V,
+  order = c(1, 0, 0)
+)
+
+AR1
+# Innovations Z(t)
+Zt <- residuals(AR1)
+# ACF of Z(t)
+acf(Zt, main = "ACF of Z(t)")
+# ACF of absolute Z(t)
+acf(abs(Zt), main = "ACF of |Z(t)|")
+# QQ plot of Z(t)
+qqnorm(Zt, main = "QQ Plot of Z(t)")
+qqline(Zt)
+# Shapiro-Wilk test for normality
+shapiro.test(Zt)
+# Jarque-Bera test
+library(tseries)
+jarque.bera.test(Zt)
+
+# Ljung-Box test for Z(t) at lag 5
+Box.test(Zt, lag = 5, type = "Ljung-Box")
+
+# Ljung-Box test for Z(t) at lag 10
+Box.test(Zt, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box test for |Z(t)| at lag 5
+Box.test(abs(Zt), lag = 5, type = "Ljung-Box")
+
+# Ljung-Box test for |Z(t)| at lag 10
+Box.test(abs(Zt), lag = 10, type = "Ljung-Box")
+```
+
+
+#PROBLEM 2
+```{r}
+SP_data <- read_excel(
+  "full-data.xlsx",
+  sheet = "data"
+)
+
+
+SP_data <- SP_data[SP_data$Year >= 1962, ]
+
+# S&P volatility
+SP_Vt <- SP_data$Volatility
+
+# Take log of S&P volatility
+SP_Vt <- log(SP_Vt)
+# Putting S&P volatility with Year
+SP <- data.frame(
+  Year = SP_data$Year,
+  SP_Vt = SP_Vt
+)
+
+# Combineing bond and S&P volatility
+VAR_data <- merge(
+  Vt[, c("Year", "ln_V")],
+  SP,
+  by = "Year"
+)
+
+head(VAR_data)
+
+library(vars)
+
+# Fit VAR(1)
+VAR1 <- VAR(
+  VAR_data[, c("ln_V", "SP_Vt")],
+  p = 1,
+  type = "const"
+)
+
+summary(VAR1)
+
+#innovations
+Z <- residuals(VAR1)
+
+# Bond innovations
+Z1 <- Z[, "ln_V"]
+
+# S&P innovations
+Z2 <- Z[, "SP_Vt"]
+# ACF of bond innovations
+acf(Z1, main = "ACF of Z1")
+
+# ACF of absolute bond innovations
+acf(abs(Z1), main = "ACF of |Z1|")
+
+# ACF of S&P innovations
+acf(Z2, main = "ACF of Z2")
+
+# ACF of absolute S&P innovations
+acf(abs(Z2), main = "ACF of |Z2|")
+# QQ plot for bond innovations
+qqnorm(Z1, main = "QQ Plot of Z1")
+qqline(Z1)
+
+# QQ plot for S&P innovations
+qqnorm(Z2, main = "QQ Plot of Z2")
+qqline(Z2)
+# Shapiro-Wilk tests
+shapiro.test(Z1)
+shapiro.test(Z2)
+# Jarque-Bera tests
+library(tseries)
+
+jarque.bera.test(Z1)
+jarque.bera.test(Z2)
+
+# Ljung-Box tests for Z1
+Box.test(Z1, lag = 5, type = "Ljung-Box")
+Box.test(Z1, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for |Z1|
+Box.test(abs(Z1), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z1), lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for Z2
+Box.test(Z2, lag = 5, type = "Ljung-Box")
+Box.test(Z2, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for |Z2|
+Box.test(abs(Z2), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z2), lag = 10, type = "Ljung-Box")
+```
+
+
+#PROBLEM 3
+```{r}
+library(readxl)
+library(dplyr)
+
+# Read zero-coupon data
+ZC <- read_excel("zero-coupon-1961.xlsx")
+
+# Convert Date
+ZC$Date <- as.Date(ZC$Date)
+
+# Create Year
+ZC$Year <- format(ZC$Date, "%Y")
+
+# Convert 6Y and 7Y rates to numeric
+ZC$`6Y` <- as.numeric(na_if(ZC$`6Y`, "NA"))
+ZC$`7Y` <- as.numeric(na_if(ZC$`7Y`, "NA"))
+
+# Keep the last observation of each year
+ZC_annual <- ZC %>%
+  group_by(Year) %>%
+  slice_max(Date, n = 1) %>%
+  ungroup()
+
+# Convert rates from percent to decimal
+R6 <- ZC_annual$`6Y` / 100
+R7 <- ZC_annual$`7Y` / 100
+
+# Annual log return of the 7-year zero-coupon bond
+Bond_Return <- 7 * R7[-length(R7)] - 6 * R6[-1]
+
+# Put together
+Bond_Returns <- data.frame(
+  Year = ZC_annual$Year[-1],
+  Log_Return = Bond_Return
+)
+
+head(Bond_Returns)
+```
+#4
+
+```{r}
+
+
+Rt <- data.frame(
+  Year = ZC_annual$Year,
+  R = ZC_annual$`7Y` / 100
+)
+
+
+Rt <- Rt[
+  Rt$Year >= 1962 & Rt$Year <= 2025,
+]
+
+head(Rt)
+
+R_current <- Rt$R[-1]
+R_lag <- Rt$R[-length(Rt$R)]
+
+# Fitting AR(1)
+AR1_R <- lm(R_current ~ R_lag)
+
+
+summary(AR1_R)
+
+
+Z_R <- residuals(AR1_R)
+Z_R <- residuals(AR1_R)
+
+# ACF of residuals
+acf(Z_R, main = "ACF of Z")
+
+# ACF of absolute residuals
+acf(abs(Z_R), main = "ACF of |Z|")
+
+# QQ plot
+qqnorm(Z_R, main = "QQ Plot of Z")
+qqline(Z_R)
+
+# Shapiro-Wilk normality test
+shapiro.test(Z_R)
+
+# Jarque-Bera normality test
+library(tseries)
+jarque.bera.test(Z_R)
+
+# Ljung-Box tests for residuals
+Box.test(Z_R, lag = 5, type = "Ljung-Box")
+Box.test(Z_R, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for absolute residuals
+Box.test(abs(Z_R), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z_R), lag = 10, type = "Ljung-Box")
+```
+
+#Problem 5
+```{r}
+# Merging 7Y rate with PC1 bond volatility by year
+P5 <- merge(
+  Rt[, c("Year", "R")],
+  Vt[, c("Year", "V")],
+  by = "Year"
+)
+
+P5$Year <- as.numeric(P5$Year)
+
+# Creating lagged R using the actual previous year
+P5_lag <- P5[, c("Year", "R")]
+P5_lag$Year <- P5_lag$Year + 1
+names(P5_lag)[2] <- "R_lag"
+
+# Adding the correct one-year lag
+P5 <- merge(
+  P5[, c("Year", "R", "V")],
+  P5_lag,
+  by = "Year",
+  all.x = TRUE
+)
+
+# Checking 1990-1994
+P5[P5$Year >= 1990 & P5$Year <= 1994, ]
+
+# Creating transformed variables
+P5$R_over_V <- P5$R / P5$V
+P5$one_over_V <- 1 / P5$V
+P5$Rlag_over_V <- P5$R_lag / P5$V
+
+# Fit the model
+Model5 <- lm(
+  R_over_V ~ one_over_V + Rlag_over_V,
+  data = P5
+)
+
+summary(Model5)
+
+# Getting W(t)
+Wt <- residuals(Model5)
+
+# ACF of W(t)
+acf(Wt, main = "ACF of W")
+
+# ACF of absolute W(t)
+acf(abs(Wt), main = "ACF of |W|")
+# QQ plot of W(t)
+qqnorm(Wt, main = "QQ Plot of W")
+qqline(Wt)
+
+# Shapiro-Wilk normality test
+shapiro.test(Wt)
+
+# Jarque-Bera normality test
+library(tseries)
+jarque.bera.test(Wt)
+
+# Ljung-Box tests for W(t)
+Box.test(Wt, lag = 5, type = "Ljung-Box")
+Box.test(Wt, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for absolute W(t)
+Box.test(abs(Wt), lag = 5, type = "Ljung-Box")
+Box.test(abs(Wt), lag = 10, type = "Ljung-Box")
+```
+
+#PROBLEM 6
+```{r}
+# Creating log rates
+P5$ln_R <- log(P5$R)
+P5$ln_R_lag <- log(P5$R_lag)
+
+
+head(P5[, c("Year", "ln_R", "V", "ln_R_lag")])
+
+# Creating transformed variables for Problem 6
+P5$lnR_over_V <- P5$ln_R / P5$V
+P5$lnRlag_over_V <- P5$ln_R_lag / P5$V
+
+# model
+Model6 <- lm(
+  lnR_over_V ~ one_over_V + lnRlag_over_V,
+  data = P5
+)
+
+
+summary(Model6)
+
+# W(t) residuals
+W6 <- residuals(Model6)
+
+# ACF of W(t)
+acf(W6, main = "ACF of W - Problem 6")
+
+# ACF of absolute W(t)
+acf(abs(W6), main = "ACF of |W| - Problem 6")
+
+# QQ plot of W(t)
+qqnorm(W6, main = "QQ Plot of W - Problem 6")
+qqline(W6)
+
+# Shapiro-Wilk normality test
+shapiro.test(W6)
+
+# Jarque-Bera normality test
+library(tseries)
+jarque.bera.test(W6)
+
+# Ljung-Box tests for W(t)
+Box.test(W6, lag = 5, type = "Ljung-Box")
+Box.test(W6, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for absolute W(t)
+Box.test(abs(W6), lag = 5, type = "Ljung-Box")
+Box.test(abs(W6), lag = 10, type = "Ljung-Box")
+```
+
+
+
+#Trying to make 1 and 2 IID Gaussian byh Yeo Johnson trnasform
+```{r}
+library(bestNormalize)
+YJ1 <- yeojohnson(Vt$ln_V)
+
+YJ1
+
+Vt$YJ_ln_V <- predict(YJ1)
+
+head(Vt[, c("Year", "ln_V", "YJ_ln_V")])
+
+# AR(1) after Yeo-Johnson transformation
+AR1_YJ <- arima(
+  Vt$YJ_ln_V,
+  order = c(1, 0, 0)
+)
+
+AR1_YJ
+
+# Residuals from Yeo-Johnson AR(1)
+Z_YJ1 <- residuals(AR1_YJ)
+
+
+# ACF of residuals
+acf(Z_YJ1, main = "ACF of Z - Yeo-Johnson Problem 1")
+
+# ACF of absolute residuals
+acf(abs(Z_YJ1), main = "ACF of |Z| - Yeo-Johnson Problem 1")
+
+
+qqnorm(Z_YJ1, main = "QQ Plot of Z - Yeo-Johnson Problem 1")
+qqline(Z_YJ1)
+
+
+# Shapiro-Wilk test
+shapiro.test(Z_YJ1)
+
+# Jarque-Bera test
+library(tseries)
+jarque.bera.test(Z_YJ1)
+
+
+# Residuals
+Box.test(Z_YJ1, lag = 5, type = "Ljung-Box")
+Box.test(Z_YJ1, lag = 10, type = "Ljung-Box")
+
+# Absolute residuals
+Box.test(abs(Z_YJ1), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z_YJ1), lag = 10, type = "Ljung-Box")
+```
+
+#For Probelm 2 Applying Yeo Johnson transformation to it
+```{r}
+
+library(bestNormalize)
+library(vars)
+library(tseries)
+
+
+
+# Bond log volatility
+YJ_Bond <- yeojohnson(VAR_data$ln_V)
+
+# S&P log volatility
+YJ_SP <- yeojohnson(VAR_data$SP_Vt)
+
+# estimated lambdas
+YJ_Bond
+YJ_SP
+
+
+#Creating trnasformed variables
+VAR_data$YJ_Bond <- predict(YJ_Bond)
+VAR_data$YJ_SP <- predict(YJ_SP)
+
+
+head(
+  VAR_data[, c("Year", "ln_V", "YJ_Bond", "SP_Vt", "YJ_SP")]
+)
+
+
+# 3. Fitting VAR(1) using Yeo-Johnson transformed variables
+VAR_YJ <- VAR(
+  VAR_data[, c("YJ_Bond", "YJ_SP")],
+  p = 1,
+  type = "const"
+)
+
+summary(VAR_YJ)
+
+
+# 4. new residuals
+
+Z_YJ <- residuals(VAR_YJ)
+
+# Bond innovation
+Z1_YJ <- Z_YJ[, "YJ_Bond"]
+
+# S&P innovation
+Z2_YJ <- Z_YJ[, "YJ_SP"]
+
+
+# ACF of Z1
+acf(
+  Z1_YJ,
+  main = "ACF of Z1 - Yeo-Johnson Problem 2"
+)
+
+# ACF of absolute Z1
+acf(
+  abs(Z1_YJ),
+  main = "ACF of |Z1| - Yeo-Johnson Problem 2"
+)
+
+# QQ plot
+qqnorm(
+  Z1_YJ,
+  main = "QQ Plot of Z1 - Yeo-Johnson Problem 2"
+)
+qqline(Z1_YJ)
+
+# Normality tests
+shapiro.test(Z1_YJ)
+jarque.bera.test(Z1_YJ)
+
+# Ljung-Box tests for Z1
+Box.test(Z1_YJ, lag = 5, type = "Ljung-Box")
+Box.test(Z1_YJ, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for absolute Z1
+Box.test(abs(Z1_YJ), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z1_YJ), lag = 10, type = "Ljung-Box")
+
+
+# ACF of Z2
+acf(
+  Z2_YJ,
+  main = "ACF of Z2 - Yeo-Johnson Problem 2"
+)
+
+# ACF of absolute Z2
+acf(
+  abs(Z2_YJ),
+  main = "ACF of |Z2| - Yeo-Johnson Problem 2"
+)
+
+# QQ plot
+qqnorm(
+  Z2_YJ,
+  main = "QQ Plot of Z2 - Yeo-Johnson Problem 2"
+)
+qqline(Z2_YJ)
+
+# Normality tests
+shapiro.test(Z2_YJ)
+jarque.bera.test(Z2_YJ)
+
+# Ljung-Box tests for Z2
+Box.test(Z2_YJ, lag = 5, type = "Ljung-Box")
+Box.test(Z2_YJ, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for absolute Z2
+Box.test(abs(Z2_YJ), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z2_YJ), lag = 10, type = "Ljung-Box")
+```
+

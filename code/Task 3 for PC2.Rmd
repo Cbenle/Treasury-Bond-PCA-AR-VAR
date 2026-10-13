@@ -1,0 +1,116 @@
+---
+title: "Task 3 on PC2"
+author: "Cornelius Benle"
+date: "2026-10-04"
+output: html_document
+---
+
+#PROBLEM 1
+```{r}
+# Read annual PC2 volatility
+PC2_annual <- read_excel(
+  "Zero_Coupon_1961_PC_Volatility.xlsx",
+  sheet = "PC2 Annual"
+)
+
+
+PC2_annual <- PC2_annual[
+  PC2_annual$Year >= 1962 & PC2_annual$Year <= 2025,
+]
+
+V_PC2 <- PC2_annual$`PC2 Log Volatility`
+
+
+ln_V_PC2 <- log(V_PC2)
+
+# Creating one-year lag
+ln_V_PC2_lag <- c(
+  NA,
+  ln_V_PC2[-length(ln_V_PC2)]
+)
+
+# Fitting AR(1)
+AR1_PC2 <- lm(
+  ln_V_PC2 ~ ln_V_PC2_lag
+)
+
+summary(AR1_PC2)
+
+# Innovations
+Z_PC2 <- residuals(AR1_PC2)
+
+# ACF of Z(t)
+acf(Z_PC2, main = "ACF of Z(t) - PC2")
+
+# ACF of absolute Z(t)
+acf(abs(Z_PC2), main = "ACF of |Z(t)| - PC2")
+
+# QQ plot
+qqnorm(Z_PC2, main = "QQ Plot of Z(t) - PC2")
+qqline(Z_PC2)
+
+# Normality tests
+shapiro.test(Z_PC2)
+
+library(tseries)
+jarque.bera.test(Z_PC2)
+
+# Ljung-Box tests for Z(t)
+Box.test(Z_PC2, lag = 5, type = "Ljung-Box")
+Box.test(Z_PC2, lag = 10, type = "Ljung-Box")
+
+# Ljung-Box tests for |Z(t)|
+Box.test(abs(Z_PC2), lag = 5, type = "Ljung-Box")
+Box.test(abs(Z_PC2), lag = 10, type = "Ljung-Box")
+```
+
+#NORmaliizng by stock
+```{r}
+# Reading S&P volatility data
+SP_data <- read_excel(
+  "full-data.xlsx",
+  sheet = "data"
+)
+
+# Years corresponding to the AR(1) innovations
+Z_data <- data.frame(
+  Year = PC2_annual$Year[-1],
+  Z_PC2 = Z_PC2
+)
+
+# Match innovations with S&P volatility by year
+PC2_SP <- merge(
+  Z_data,
+  SP_data[, c("Year", "Volatility")],
+  by = "Year"
+)
+
+# S&P volatility
+SP_Vt <- PC2_SP$Volatility
+
+# Dividing the innovation by S&P volatility
+# This corresponds to dividing the original AR(1) equation by V_SP,t
+Wt <- PC2_SP$Z_PC2 / SP_Vt
+
+
+# Testing W(t) for IID Gaussian behavior
+
+acf(Wt, main = "ACF of W(t)")
+
+acf(abs(Wt), main = "ACF of |W(t)|")
+
+qqnorm(Wt, main = "QQ Plot of W(t)")
+qqline(Wt)
+
+shapiro.test(Wt)
+
+jarque.bera.test(Wt)
+
+Box.test(Wt, lag = 5, type = "Ljung-Box")
+Box.test(Wt, lag = 10, type = "Ljung-Box")
+
+Box.test(abs(Wt), lag = 5, type = "Ljung-Box")
+Box.test(abs(Wt), lag = 10, type = "Ljung-Box")
+```
+
+
